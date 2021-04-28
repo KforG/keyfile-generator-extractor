@@ -3,34 +3,43 @@ package main
 import (
 	"fmt"
 	"io/ioutil"
+	"syscall"
 
+	qrcodeTerminal "github.com/Baozisoftware/qrcode-terminal-go"
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcutil"
 	"golang.org/x/crypto/nacl/secretbox"
 	"golang.org/x/crypto/scrypt"
+	"golang.org/x/crypto/ssh/terminal"
 )
 
 func main() {
-	var pass string
-	fmt.Println("Type the password to your keyfile.hex:")
-	fmt.Scanln(&pass)
-	priv, err := LoadPrivateKey(pass)
-	if err != nil {
-		panic(err)
-	}
-	convert(priv)
+	LoadPrivateKey()
 }
 
-//The majority of this code has been taken from https://github.com/vertcoin-project/one-click-miner-vnext, some modifications added for this to be able to work
-func LoadPrivateKey(password string) ([]byte, error) {
+func getPass() (pass []byte) {
+	fmt.Println("Type the password to your keyfile.hex:")
+	pass, err := terminal.ReadPassword(int(syscall.Stdin)) //Hides password from the terminal
+	if err != nil {
+		fmt.Println("Something went wrong getting the password")
+	}
+	return pass
+}
+
+//Decryption part of this code has been taken from https://github.com/vertcoin-project/one-click-miner-vnext
+func LoadPrivateKey() {
 	filename := "keyFile.hex"
+	password := getPass()
+
 	keyfile, err := ioutil.ReadFile(filename)
 	if err != nil {
-		return []byte{}, err
+		fmt.Printf("Could not find a %s in the same folder as the extractor\n", filename)
+		panic(err)
 	}
 	if len(keyfile) != 105 {
-		return []byte{}, fmt.Errorf("Key length error for %s\n", filename)
+		fmt.Printf("Key length error for %s. Your file may be incorrectly made or corrupted!\n", filename)
+		panic(err)
 	}
 
 	enckey := keyfile[33:]
@@ -42,26 +51,37 @@ func LoadPrivateKey(password string) ([]byte, error) {
 
 	dk, err := scrypt.Key([]byte(password), salt[:], 16384, 8, 1, 32) // derive key
 	if err != nil {
-		return []byte{}, err
+		fmt.Println(err)
 	}
 	copy(dk32[:], dk[:]) // copy into fixed size array
 
 	// nonce for secretbox is the same as scrypt salt.  Seems fine.  Really.
 	priv, worked := secretbox.Open(nil, enckey[24:], salt, dk32)
 	if worked != true {
-		return []byte{}, fmt.Errorf("Decryption failed for %s\n", filename)
-	}
+		fmt.Printf("Decryption failed for %s! Make sure to use the correct password\n", filename)
+		main()
+	} else {
+		convert(priv)
+		fmt.Println("Press enter to exit")
+		fmt.Scanln()
 
-	return priv, nil
+	}
 }
 
-//This function converts the dectrypted data from the keyfile into a private key in compressed WIF format
+//This function converts the dectrypted data from the keyfile into a private key in a compressed WIF format
 func convert(priv []byte) {
 	decPriv, _ := btcec.PrivKeyFromBytes(btcec.S256(), priv)
-
 	WIF, err := btcutil.NewWIF(decPriv, &chaincfg.MainNetParams, true)
 	if err != nil {
-		fmt.Errorf("Error reading the private key from bytes\n")
+		fmt.Printf("Error reading the private key from bytes\n")
+		panic(err)
 	}
 	fmt.Printf("Private key in compressed WIF format: %s\n", WIF)
+	ShowQR(WIF)
+}
+
+func ShowQR(WIF *btcutil.WIF) {
+	content := fmt.Sprintf("%s", WIF)
+	qr := qrcodeTerminal.New()
+	qr.Get(content).Print()
 }
