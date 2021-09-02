@@ -29,7 +29,7 @@ func getPass() (pass []byte) {
 
 //Decryption part of this code has been taken from https://github.com/vertcoin-project/one-click-miner-vnext
 func LoadPrivateKey() {
-	filename := "keyFile.hex"
+	filename := "keyfile.hex"
 	password := getPass()
 
 	keyfile, err := ioutil.ReadFile(filename)
