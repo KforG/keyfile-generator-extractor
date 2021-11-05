@@ -30,3 +30,8 @@ Once finished you can build the program:
 ```bash
 go build extract-privatekey.go
 ```
+
+## Donate
+If you want to support the development of this program feel free to donate!
+
+Vertcoin: `Vn9FSJ2WiEWcsuhvC2bGK4ZGaqcfMLZ4VC`
